@@ -80,3 +80,32 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050816;color:#eef1f
 #result{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; background:rgba(5,8,22,.94); z-index:11; }
 #result.hidden{ display:none; }
 #rank{ font-size:96px; font-weight:900; }
+
+/* HALLS — chi tiết từng người */
+.audRow{ position:absolute; left:50%; transform:translateX(-50%); display:flex; gap:8px; justify-content:center; }
+.person{ display:flex; flex-direction:column; align-items:center; gap:2px; animation: breathe 3s ease-in-out infinite; }
+@keyframes breathe{ 0%,100%{ transform: translateY(0)} 50%{ transform: translateY(-1px)} }
+.pHead{ width:14px; height:14px; border-radius:50%; border:1px solid rgba(0,0,0,.3); box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+.pBody{ width:22px; height:18px; border-radius:6px 6px 3px 3px; border:1px solid rgba(0,0,0,.25); }
+.pose-clap .pBody{ transform: scaleX(0.95); }
+.pose-lean{ transform: rotate(-2deg); }
+.hallLabel{ position:absolute; bottom:6%; left:50%; transform:translateX(-50%); font-size:10px; letter-spacing:3px; color:var(--accent, #d4b36a); opacity:.6; font-weight:700; }
+.orchSection{ position:absolute; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:4px; }
+.secTitle{ font-size:9px; letter-spacing:2px; color:#8a9cc5; opacity:.7; }
+.musRow{ display:flex; gap:10px; }
+.musician{ display:flex; flex-direction:column; align-items:center; gap:2px; animation: musPlay 1.2s ease-in-out infinite; }
+@keyframes musPlay{ 0%,100%{ transform: translateY(0)} 50%{ transform: translateY(-2px)} }
+.mIcon{ font-size:18px; filter: drop-shadow(0 2px 4px rgba(0,0,0,.5)); }
+.mBody{ width:16px; height:16px; background: #2a334a; border-radius:4px; border:1px solid rgba(212,179,106,.3); }
+.mStand{ width:18px; height:2px; background:#1a2340; border-radius:1px; }
+
+/* Khi có hall chi tiết, ẩn emoji placeholder */
+#far.has-detailed::before, #mid.has-detailed::before{ content:none !important; }
+
+/* Hall selector in menu */
+.hallGrid{ display:grid; grid-template-columns: repeat(3,1fr); gap:10px; margin:12px 0; }
+.hallCard{ padding:12px; border:1px solid rgba(212,179,106,.25); border-radius:10px; background: rgba(255,255,255,.03); cursor:pointer; transition: border-color .15s, transform .12s; }
+.hallCard:hover{ border-color: var(--accent, #d4b36a); transform: translateY(-2px); }
+.hallCard.active{ border-color: var(--accent, #d4b36a); background: rgba(212,179,106,.08); box-shadow: 0 0 12px rgba(212,179,106,.25); }
+.hallCard b{ display:block; color:#f5e8c8; font-size:13px; }
+.hallCard span{ font-size:11px; color:#8a9cc5; }

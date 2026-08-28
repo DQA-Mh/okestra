@@ -3,6 +3,7 @@ import { AudioEngine } from './audio/AudioEngine'
 import { Tracker } from './hand/Tracker'
 import { Baton } from './conduct/Baton'
 import { Score } from './conduct/Score'
+import { HALLS, renderAudience, renderOrchestra, applyHallColors, type HallId } from './scene/Halls'
 
 type Beat = { time:number, dir:number, x?:number, y?:number, cue?:string }
 
@@ -45,11 +46,12 @@ let handL = { x:0.5,y:0.5, vx:0, vy:0, swinging:false, dir:0 }
 let calibHold = 0
 let raf = 0
 
-// Opera hall parallax
+// Opera hall parallax + 5 halls chi tiết
 const far = document.getElementById('far')!
 const mid = document.getElementById('mid')!
 const near = document.getElementById('near')!
 const light = document.getElementById('light')!
+const menuFar = document.getElementById('menuFar') as HTMLElement | null
 let targetPan = 0
 function parallax(v:number){
   far.style.transform = `translateX(${v*12}px)`
@@ -57,6 +59,29 @@ function parallax(v:number){
   near.style.transform = `translateX(${v*40}px)`
   canvas.style.transform = `translateX(${v*14}px)`
   light.style.transform = `translateX(calc(-50% + ${v*30}px))`
+  if(menuFar) menuFar.style.transform = `translateX(${v*8}px)`
+}
+let currentHall: HallId = 'vienna'
+function setHall(id: HallId){
+  currentHall = id
+  applyHallColors(id)
+  // Render chi tiết từng người cho game hall
+  renderAudience(far, id)
+  far.classList.add('has-detailed')
+  renderOrchestra(mid, id)
+  mid.classList.add('has-detailed')
+  // Render cho menu hall
+  if(menuFar){
+    renderAudience(menuFar, id)
+    menuFar.classList.add('has-detailed')
+  }
+  // cập nhật accent cho menu
+  document.documentElement.style.setProperty('--accent', HALLS[id].colors.accent)
+  // highlight card
+  document.querySelectorAll('.hallCard').forEach(c=>{
+    c.classList.toggle('active', (c as HTMLElement).dataset.hall===id)
+  })
+  console.log(`[Hall] ${HALLS[id].name} — ${HALLS[id].musicianGroups.length} groups`)
 }
 
 tracker.onHands = (r,l)=>{
@@ -222,6 +247,14 @@ document.querySelectorAll('.closeModal').forEach(b=> b.addEventListener('click',
 document.querySelectorAll('.songCard').forEach(c=> c.addEventListener('click', ()=>{
   document.getElementById('modalSongs')?.classList.add('hidden'); showGame(); calib.classList.remove('hidden')
 }))
+document.querySelectorAll('.hallCard').forEach(c=>{
+  c.addEventListener('click', ()=>{
+    const hid=(c as HTMLElement).dataset.hall as HallId
+    if(hid) setHall(hid)
+  })
+})
+// Khởi tạo hall mặc định chi tiết
+setHall('vienna')
 document.getElementById('vol')?.addEventListener('input', e=>{ const _v=parseFloat((e.target as HTMLInputElement).value); void _v })
 document.getElementById('diff')?.addEventListener('input', e=>{
   const v=parseFloat((e.target as HTMLInputElement).value)
