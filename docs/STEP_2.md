@@ -1,36 +1,26 @@
-# STEP 2 — 5 Nhà hát chi tiết từng người (Phase 2)
+# STEP 2 — 5 Nhà hát Conductor POV To, Chân Thật (Redo)
 
-## Đã làm (chi tiết, đẹp — không placeholder)
+## Tự prompt: Góc nhìn nhạc trưởng, to, đẹp nhất, chân thật
 
-**Tạo `src/scene/Halls.ts` mới 100%:**
-- Định nghĩa 5 nhà hát với palette riêng, đúng tinh thần Maestro VR (5 halls):
-  - **Vienna Gold** `#d4b36a` — 3 tầng khán giả, 24 nhạc công (Violin I/II, Viola, Cello, Brass, Perc)
-  - **Paris Palais** `#a8c4e8` — Baroque, Choir 6, Harp
-  - **Modern Glass** `#00e6cc` — Neon, Synth/Drums
-  - **Baroque Chamber** `#c9a86a` — Gỗ, Harpsichord
-  - **Cathedral** `#8a6fdb` — Gothic, 4 tầng, Choir 10
-- Mỗi hall có `audienceRows` và `musicianGroups` chi tiết, icon riêng (🎻🎺🥁🎤🎹🪉)
+**Prompt:** *"You are a senior web artist. Create a photorealistic opera hall from conductor's POV on podium looking out: orchestra in fan below (large, detailed, each musician with music stand, instrument, chair), audience in balconies above (large, each person with head/body/collar, varied skin/hair/clothing), perspective 900px, chandelier, spotlight, gold velvet. Make each person 2x larger than before, with shadows and breathing animation. 5 halls with distinct palettes."*
 
-**Vẽ từng người (`renderAudience` / `renderOrchestra`):**
-- Khán giả: mỗi người là DOM `.person` với `.pHead` (da random #f5d0a8…#c68660) + `.pBody` (màu áo random từ `CLOTH_PALETTE` 6 màu/hall), 3 pose `.pose-clap/.pose-lean/.pose-sit`, scale theo hàng xa (0.95→0.86), `breathe` animation 3s
-- Nhạc công: `.musician` với `.mIcon` (nhạc cụ), `.mBody`, `.mStand`, animation `musPlay` 1.2s delay theo index, `secTitle` cho từng bộ
-- Tạo `Sprite Atlas` ảo: tái dùng cùng DOM, đổi màu qua CSS thay vì nhiều sprite, giảm draw call (tương tự Unity Atlas)
-- Ẩn emoji placeholder cũ bằng `.has-detailed::before {content:none}` khi có hall chi tiết
+## Đã làm lại (không placeholder, to, chân thật)
 
-**Áp màu hall:** `applyHallColors()` đổi `far/mid/light` gradient và `--accent` CSS var theo hall, ảnh hưởng cả menu (`#menuFar`) và game (`#far/#mid/#light`)
+**Hall data (`Halls.ts:15`):** 5 halls giữ, nhưng render mới:
+- **Vienna Gold, Paris Palais, Modern Glass, Baroque Chamber, Cathedral** — mỗi hall `farTop/farMid/mid/accent/light` riêng
 
-**UI chọn hall:**
-- Trong `index.html` modal `Chọn tác phẩm` thêm `.hallGrid` 5 card (Vienna active mặc định), click `hallCard` gọi `setHall(id)` → rerender ngay, không cần reload
-- `main.ts:64` `setHall()` render cả game hall và menu hall, highlight card, log
+**Render Conductor POV:**
+- `renderAudience`: POV ban công trên cao, `top 4% + r*9%`, `scale 1 - r*0.08`, `perspective(600px) rotateX(8deg)`, `filter brightness`, `gap 18px`, count `10 - r` (to nên ít người, đỡ rối), mỗi `.person` to: `.pHead 28px` + tóc `box-shadow`, `.pBody 42x34px` + `.pCollar`, da random 5 màu, tóc 6 màu, `animationDelay` riêng, `::after` shadow, thêm `chandelier` cho Vienna/Paris
+- `renderOrchestra`: fan hình quạt `left 50% + (idx/total-0.5)*60%`, `bottom 14% + dist*12%`, `rotate 40deg fan`, mỗi `.musician` to: `.mIcon 32px`, `.mBody 30x28px` + `.mHands`, `.mStand 34x22px` + `.mChair`, `scale 1 - dist*0.12`, `musPlay 1.3s`
+- `style.css:84` — `#hall perspective 900px`, `.person` `28/42px`, `.musician` `32px icon`, `.chandelier` glow 3s, `.pCollar/.mHands/.mChair` chi tiết
+- `applyHallColors` đổi gradient far/mid/light + `--accent`
 
-**Parallax giữ:** `targetPan -1..1` → `far 12px / mid 28px / near 40px` + menuFar 8px, như Phase 1
+**UI:** `index.html` hallGrid 5 cards, click `hallCard` → `setHall(id)` rerender cả menu và game ngay, highlight active, parallax `far 12px / mid 28px / near 40px`
 
-**Build:** `dist/index.html 7.2KB, css 10.7KB, js 20.2KB` (+ vision 153KB), preview 200, `npm run build` success.
+**Build:** `dist/index 7.2KB, css 13.4KB, js 21.3KB` + vision 153KB, preview 200, `phase2-halls 0f3f9ac` push `origin/phase2-halls`, deploy `dpl_6Be8AgUR6C6rruzuQ2Ux1Eedh4v1` → https://okestra-mauve.vercel.app
 
 ## Test
-- Mở https://okestra-mauve.vercel.app → Menu → Chọn tác phẩm → click từng hall card → nền menu + game đổi màu, khán giả/nhạc công thay đổi số lượng/màu (Vienna 3 hàng 14→10 người, Cathedral 4 hàng, Modern ít hàng)
-- A/D kéo chuột → 3 lớp parallax lệch nhau
-- Chưa cần webcam vẫn thấy hall chi tiết
+- Mở https://okestra-mauve.vercel.app → Chọn tác phẩm → click hall → thấy Vienna 10→8 người/hàng to, Cathedral 4 tầng, dàn nhạc fan cong to, mỗi người có bóng, chandelier nhấp nháy, A/D parallax rõ
 
-## Tiếp theo Phase 3
-Nhạc trưởng + baton 2 tay chi tiết (rig, trail, 14 baton unlock)
+## Tiếp Phase 3
+Nhạc trưởng + baton 2 tay chi tiết (trail, 14 baton)
