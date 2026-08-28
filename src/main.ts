@@ -4,6 +4,7 @@ import { Tracker } from './hand/Tracker'
 import { Baton } from './conduct/Baton'
 import { Score } from './conduct/Score'
 import { HALLS, renderAudience, renderOrchestra, applyHallColors, type HallId } from './scene/Halls'
+import { ThreeHall } from './scene/ThreeHall'
 
 type Beat = { time:number, dir:number, x?:number, y?:number, cue?:string }
 
@@ -46,12 +47,20 @@ let handL = { x:0.5,y:0.5, vx:0, vy:0, swinging:false, dir:0 }
 let calibHold = 0
 let raf = 0
 
-// Opera hall parallax + 5 halls chi tiết
+// Opera hall parallax + 5 halls chi tiết + 3D
 const far = document.getElementById('far')!
 const mid = document.getElementById('mid')!
 const near = document.getElementById('near')!
 const light = document.getElementById('light')!
 const menuFar = document.getElementById('menuFar') as HTMLElement | null
+const threeWrap = document.getElementById('threeWrap')!
+let threeHall: ThreeHall | null = null
+try {
+  threeHall = new ThreeHall(threeWrap)
+  // Ẩn CSS hall 2D khi có 3D để không che (giữ near podium thôi)
+  far.style.opacity = '0.0'
+  mid.style.opacity = '0.0'
+} catch(e){ console.warn('[Three] fallback 2D', e) }
 let targetPan = 0
 function parallax(v:number){
   far.style.transform = `translateX(${v*12}px)`
@@ -60,12 +69,13 @@ function parallax(v:number){
   canvas.style.transform = `translateX(${v*14}px)`
   light.style.transform = `translateX(calc(-50% + ${v*30}px))`
   if(menuFar) menuFar.style.transform = `translateX(${v*8}px)`
+  threeHall?.setPan(v)
 }
 let currentHall: HallId = 'vienna'
 function setHall(id: HallId){
   currentHall = id
   applyHallColors(id)
-  // Render chi tiết từng người cho game hall
+  // Render chi tiết từng người cho game hall (2D fallback, ẩn khi có 3D)
   renderAudience(far, id)
   far.classList.add('has-detailed')
   renderOrchestra(mid, id)
@@ -75,6 +85,8 @@ function setHall(id: HallId){
     renderAudience(menuFar, id)
     menuFar.classList.add('has-detailed')
   }
+  // 3D hall
+  threeHall?.setHall(id as any)
   // cập nhật accent cho menu
   document.documentElement.style.setProperty('--accent', HALLS[id].colors.accent)
   // highlight card
