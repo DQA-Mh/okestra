@@ -1,10 +1,10 @@
-// TilesEngine — Magic Tiles 3: 4 lane, tiles rơi, tap/hold
+// TilesEngine — Magic Tiles 3: 4 lane, tiles rơi, tap/hold — FIX: tiles to, sáng hơn, dễ thấy
 export type Tile = {
-  lane: number // 0..3
-  time: number // hit time
-  endTime?: number // cho long tile (hold)
+  lane: number
+  time: number
+  endTime?: number
   type: 'tap'|'hold'
-  y: number // 0..1 progress
+  y: number
   hit: boolean
   missed: boolean
   active: boolean
@@ -16,18 +16,17 @@ export class TilesEngine {
   tiles: Tile[] = []
   idx = 0
   beats: {time:number, lane:number, hold?:number}[] = []
-  speed = 420 // px/s
-  travel = 1.45 // s từ top tới hit line
+  speed = 420
+  travel = 1.45
   perfectW = 0.08
   goodW = 0.15
   canvasH = 720
-  hitY = 0.82 // hit line 82% height
+  hitY = 0.82
 
   load(beats: {time:number, dir:number}[]){
-    // Map dir -> lane, 20% long hold
     this.beats = beats.map((b,i)=>{
       const lane = b.dir % 4
-      const isHold = Math.random()<0.18 && i>2 // 18% long
+      const isHold = Math.random()<0.18 && i>2
       return { time:b.time, lane, hold: isHold? 0.55 : undefined }
     }).sort((a,b)=>a.time-b.time)
     this.idx=0
@@ -36,7 +35,6 @@ export class TilesEngine {
   }
 
   update(songTime:number){
-    // spawn
     while(this.idx < this.beats.length && this.beats[this.idx].time - this.travel <= songTime){
       const b=this.beats[this.idx]
       this.tiles.push({
@@ -48,23 +46,20 @@ export class TilesEngine {
       })
       this.idx++
     }
-    // update y + miss
     for(const t of this.tiles){
       if(!t.active) continue
       const dt = songTime - (t.time - this.travel)
-      t.y = dt / this.travel // 0..1 (0 top, hitY at 1)
+      t.y = dt / this.travel
       if(songTime > t.time + 0.25 && !t.hit){
         t.active=false; t.missed=true
       }
-      // long tile: nếu đã hit đầu mà giữ chưa đủ endTime thì giữ
       if(t.type==='hold' && t.hit && t.endTime && songTime < t.endTime){
-        t.active=true // giữ active để vẽ hold
+        t.active=true
       }
     }
     this.tiles = this.tiles.filter(t=> t.active || (t.type==='hold' && t.hit && t.endTime && songTime < t.endTime!))
   }
 
-  // Tap lane 0..3 tại time
   tap(lane:number, time:number): { res:HitRes, tile:Tile|null }{
     let best:Tile|null=null, bestDiff=Infinity
     for(const t of this.tiles){
@@ -81,20 +76,17 @@ export class TilesEngine {
     if(res==='Perfect' || res==='Good'){
       best.hit=true
       if(best.type==='tap') best.active=false
-      // hold: giữ đến endTime
     } else if(res==='Miss'){
       best.active=false; best.missed=true
     }
     return { res, tile:best }
   }
 
-  // Hold check: đang giữ lane
   holding(lane:number, time:number, isHolding:boolean){
     for(const t of this.tiles){
       if(t.type!=='hold' || !t.hit) continue
       if(t.lane!==lane) continue
       if(!isHolding && time < (t.endTime||0)){
-        // thả sớm -> Good hoặc Miss
         t.active=false
         return 'Good'
       }
@@ -106,67 +98,82 @@ export class TilesEngine {
     return null
   }
 
-  // Vẽ 4 lane + tiles (Magic Tiles 3)
   draw(ctx:CanvasRenderingContext2D, W:number, H:number, songTime:number){
     const lanes=4
     const laneW = W / lanes
-    // lane background
+    // lane background — sáng hơn để thấy
     for(let i=0;i<lanes;i++){
-      ctx.fillStyle = i%2===0 ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.015)'
+      ctx.fillStyle = i%2===0 ? 'rgba(212,179,106,0.07)' : 'rgba(255,255,255,0.03)'
       ctx.fillRect(i*laneW, 0, laneW, H)
-      ctx.strokeStyle='rgba(212,179,106,0.18)'
+      ctx.strokeStyle='rgba(212,179,106,0.28)'
+      ctx.lineWidth=1.5
       ctx.beginPath(); ctx.moveTo(i*laneW,0); ctx.lineTo(i*laneW,H); ctx.stroke()
     }
-    // hit line
+    // hit line — to + glow
     const hitY = H * this.hitY
+    ctx.shadowColor='#d4b36a'; ctx.shadowBlur=12
     ctx.strokeStyle='#d4b36a'
-    ctx.lineWidth=3
+    ctx.lineWidth=4
     ctx.beginPath(); ctx.moveTo(0,hitY); ctx.lineTo(W,hitY); ctx.stroke()
-    ctx.fillStyle='rgba(212,179,106,0.12)'
-    ctx.fillRect(0, hitY-28, W, 56)
-    // lane keys
+    ctx.shadowBlur=0
+    ctx.fillStyle='rgba(212,179,106,0.18)'
+    ctx.fillRect(0, hitY-32, W, 64)
+    // lane keys — to hơn
     const keys=['D','F','J','K']
-    ctx.fillStyle='rgba(255,255,255,0.55)'; ctx.font='700 13px Inter'; ctx.textAlign='center'
-    for(let i=0;i<lanes;i++) ctx.fillText(keys[i], i*laneW + laneW/2, hitY+6)
+    ctx.fillStyle='#f5e8c8'; ctx.font='800 18px Inter'; ctx.textAlign='center'
+    for(let i=0;i<lanes;i++){
+      ctx.fillStyle='rgba(212,179,106,0.95)'
+      ctx.fillRect(i*laneW + laneW/2 - 22, hitY+10, 44, 22)
+      ctx.fillStyle='#0a0e1a'
+      ctx.fillText(keys[i], i*laneW + laneW/2, hitY+26)
+    }
+    ctx.textAlign='left'
 
-    // tiles
+    // tiles — TO, SÁNG, có viền glow
     for(const t of this.tiles){
       if(!t.active && !t.hit) continue
       const x = t.lane*laneW + laneW/2
-      const y = t.y * hitY // y 0..hitY
+      const y = t.y * hitY
       const isHold = t.type==='hold'
-      const h = isHold ? ( (t.endTime! - t.time)/this.travel * hitY ) : 54
-      const w = laneW * 0.82
-      // tile body
-      ctx.fillStyle = t.hit ? 'rgba(212,179,106,0.95)' : (isHold ? '#8a6fdb' : '#0f1428')
-      ctx.strokeStyle = t.hit ? '#fff' : '#d4b36a'
-      ctx.lineWidth = isHold? 2 : 1.5
-      const tileH = isHold ? h : 54
-      const tileY = isHold ? (t.y*hitY - h + 28) : (y - 27)
-      // rounded rect
-      const r=10
+      const h = isHold ? ( (t.endTime! - t.time)/this.travel * hitY ) : 68
+      const w = laneW * 0.88
+      const tileH = isHold ? h : 68
+      const tileY = isHold ? (t.y*hitY - h + 34) : (y - 34)
+      // glow
+      ctx.shadowColor = t.hit ? '#fff' : (isHold ? '#8a6fdb' : '#d4b36a')
+      ctx.shadowBlur = t.hit ? 16 : 10
+      ctx.fillStyle = t.hit ? '#facc15' : (isHold ? '#6d28d9' : '#0f172a')
+      ctx.strokeStyle = t.hit ? '#fff' : '#facc15'
+      ctx.lineWidth = 2.5
+      const r=12
       ctx.beginPath()
-      // @ts-ignore roundRect
-      if(ctx.roundRect) ctx.roundRect(x-w/2, tileY, w, tileH, r)
-      else { ctx.rect(x-w/2, tileY, w, tileH) }
+      // @ts-ignore
+      if((ctx as any).roundRect) (ctx as any).roundRect(x-w/2, tileY, w, tileH, r)
+      else ctx.rect(x-w/2, tileY, w, tileH)
       ctx.fill(); ctx.stroke()
-      // icon
+      ctx.shadowBlur=0
+      // inner highlight
+      ctx.fillStyle='rgba(255,255,255,0.12)'
+      ctx.fillRect(x-w/2+4, tileY+4, w-8, 10)
+      // icon to
       if(!isHold){
         ctx.fillStyle=t.hit ? '#1a1204' : '#f5e8c8'
-        ctx.font='700 11px Inter'; ctx.textAlign='center'
-        ctx.fillText(t.lane%2===0?'♪':'♫', x, tileY + 32)
+        ctx.font='800 18px Inter'; ctx.textAlign='center'
+        ctx.fillText(t.lane%2===0?'♪':'♫', x, tileY + 42)
+        ctx.textAlign='left'
       } else {
-        ctx.fillStyle='rgba(255,255,255,0.9)'; ctx.font='600 10px Inter'
-        ctx.fillText('HOLD', x, tileY + 20)
-        // hold line
-        ctx.strokeStyle='rgba(255,255,255,0.35)'; ctx.beginPath(); ctx.moveTo(x, tileY+28); ctx.lineTo(x, tileY+h-10); ctx.stroke()
-      }
-      // time left
-      if(t.time > songTime){
-        ctx.fillStyle='rgba(255,255,255,0.55)'; ctx.font='10px Inter'
-        ctx.fillText((t.time - songTime).toFixed(2)+'s', x, tileY - 8)
+        ctx.fillStyle='#fff'; ctx.font='700 12px Inter'; ctx.textAlign='center'
+        ctx.fillText('HOLD ↕', x, tileY + 24)
+        ctx.strokeStyle='rgba(255,255,255,0.5)'; ctx.lineWidth=1.5
+        ctx.beginPath(); ctx.moveTo(x, tileY+32); ctx.lineTo(x, tileY+h-12); ctx.stroke()
+        ctx.textAlign='left'
       }
     }
-    ctx.textAlign='left'
+    // preview khi chưa chơi: hiện 3 tiles mẫu để thấy có nốt
+    if(this.tiles.length===0 && this.idx===0){
+      ctx.fillStyle='rgba(255,255,255,0.35)'; ctx.font='700 14px Inter'; ctx.textAlign='center'
+      ctx.fillText('Nhấn Bắt đầu để tiles rơi • D F J K để tap • M đổi Maestro', W*0.5, H*0.5)
+      ctx.textAlign='left'
+    }
   }
 }
