@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Okestra — Nhà hát Opera</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- MENU ĐẸP — Phase 1 -->
+  <div id="menu">
+    <div id="menuHall">
+      <div id="menuFar"></div>
+      <div id="menuSpot"></div>
+      <div id="menuCurtainL" class="menuCurtain"></div>
+      <div id="menuCurtainR" class="menuCurtain"></div>
+      <div id="menuVignette"></div>
+    </div>
+    <div id="menuContent">
+      <div id="logoWrap">
+        <div id="logoCrown">✦</div>
+        <h1 id="logo">OKESTRA</h1>
+        <p id="subtitle">CONDUCT WITH CAMERA • NHƯ MAESTRO VR TRÊN WEB</p>
+        <div id="logoLine"></div>
+      </div>
+      <nav id="menuNav">
+        <button class="menuBtn primary" data-action="start">▶ Bắt đầu</button>
+        <button class="menuBtn" data-action="songs">♫ Chọn tác phẩm</button>
+        <button class="menuBtn" data-action="tutorial">📖 Hướng dẫn</button>
+        <button class="menuBtn" data-action="batons">🪄 Bộ sưu tập baton</button>
+        <button class="menuBtn" data-action="settings">⚙ Cài đặt</button>
+      </nav>
+      <div id="menuFoot">Okestra • Web Conducting • 5 Nhà hát • 30 Tác phẩm • 4 Độ khó • Phiên bản 0.1 • Phase 1</div>
+    </div>
+    <!-- Modals -->
+    <div id="modalSongs" class="modal hidden">
+      <div class="modalBox">
+        <h2>Chọn tác phẩm — 5 Thời kỳ</h2>
+        <div class="songsGrid">
+          <div class="songCard" data-id="beethoven5"><b>Beethoven — Symphony No.5</b><span>Classical • 4/4 • Allegro</span><em>★ Độ khó ★★</em></div>
+          <div class="songCard" data-id="mozart"><b>Mozart — Eine kleine Nachtmusik</b><span>Classical • 4/4</span><em>★ Độ khó ★</em></div>
+          <div class="songCard" data-id="strauss"><b>Strauss — Blue Danube</b><span>Romantic • 3/4 Waltz</span><em>★ Độ khó ★★</em></div>
+          <div class="songCard" data-id="wagner"><b>Wagner — Ride of the Valkyries</b><span>Romantic • Epic</span><em>★★★</em></div>
+          <div class="songCard" data-id="carmina"><b>Orff — Carmina Burana</b><span>Modern • Choir</span><em>★★★</em></div>
+        </div>
+        <button class="closeModal">Đóng</button>
+      </div>
+    </div>
+    <div id="modalTutorial" class="modal hidden">
+      <div class="modalBox">
+        <h2>Hướng dẫn — Như Maestro VR</h2>
+        <ol class="tutorialList">
+          <li><b>Tay phải (baton)</b> giữ tempo: vung xuống đúng phách (downbeat) — vòng tempo sẽ pulse.</li>
+          <li><b>Tay trái</b> điều dynamics: đưa cao = forte (mạnh), thấp = piano (nhẹ) — xem chữ trên baton.</li>
+          <li><b>Cue</b>: nốt rải rác ghi Strings/Brass/Winds/Perc — di tay đến nốt + đúng thời điểm + đúng hướng → Perfect.</li>
+          <li><b>Nhìn quanh</b>: A/D hoặc kéo chuột để parallax 3 lớp nhà hát.</li>
+          <li><b>Fallback</b>: không có camera dùng chuột + Space/Arrows.</li>
+        </ol>
+        <button class="closeModal">Đã hiểu</button>
+      </div>
+    </div>
+    <div id="modalBatons" class="modal hidden">
+      <div class="modalBox">
+        <h2>Bộ sưu tập baton — 14 cây</h2>
+        <div class="batonGrid">
+          <div class="batonCard locked">♟ Gỗ Sồi<br><small>Mở khóa Lv.1</small></div>
+          <div class="batonCard">🪄 Gỗ Mun<br><small>Hiện tại</small></div>
+          <div class="batonCard locked">✨ Pha lê<br><small>Lv.5</small></div>
+          <div class="batonCard locked">🔥 Vàng<br><small>Lv.10</small></div>
+        </div>
+        <button class="closeModal">Đóng</button>
+      </div>
+    </div>
+    <div id="modalSettings" class="modal hidden">
+      <div class="modalBox">
+        <h2>Cài đặt</h2>
+        <label>Âm lượng <input id="vol" type="range" min="0" max="1" step="0.05" value="0.8"></label>
+        <label>Độ khó (cửa sổ Perfect) <input id="diff" type="range" min="0" max="1" step="0.1" value="0.3"> <span id="diffVal">Normal</span></label>
+        <label><input id="camToggle" type="checkbox"> Hiện preview camera</label>
+        <button class="closeModal">Lưu</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GAME STAGE (ẩn ban đầu) -->
+  <div id="app" class="hidden">
+    <header id="topbar">
+      <div class="brand">OKESTRA</div>
+      <div class="stats">
+        <span id="score">Score 0</span>
+        <span id="combo"></span>
+        <span id="acc">Acc 0%</span>
+        <div id="audience"><div id="audienceFill"></div></div>
+      </div>
+      <div class="actions">
+        <button id="menuBtn">☰ Menu</button>
+        <button id="startBtn">Bắt đầu</button>
+        <button id="camBtn">Bật camera</button>
+      </div>
+    </header>
+    <div id="stage">
+      <div id="hall">
+        <div id="far" class="layer"></div>
+        <div id="mid" class="layer"></div>
+        <div id="near" class="layer"></div>
+        <div id="light"></div>
+        <div id="curtainL" class="curtain"></div>
+        <div id="curtainR" class="curtain"></div>
+      </div>
+      <canvas id="c" width="1280" height="720"></canvas>
+      <div id="podium">OKESTRA</div>
+      <div id="feedback"></div>
+      <div id="calib">
+        <p>Đưa 2 tay vào khung — tay phải baton, tay trái dynamics</p>
+        <div id="frame"></div>
+        <p id="calibTxt">Chờ camera…</p>
+      </div>
+      <div id="tempoRing"></div>
+    </div>
+    <div id="camWrap">
+      <video id="camVideo" autoplay playsinline muted></video>
+      <canvas id="camCanvas" width="320" height="240"></canvas>
+      <div id="camLabel">Camera • 30fps • 2 hands</div>
+    </div>
+    <footer id="foot">Okestra — tempo baton + cue + dynamics • A/D nhìn quanh • Space test</footer>
+    <div id="result" class="hidden">
+      <h1 id="rank">S</h1>
+      <p id="rScore"></p>
+      <p id="rStats"></p>
+      <button id="retry">Chơi lại</button>
+      <button id="backMenu">Về menu</button>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
