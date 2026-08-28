@@ -82,64 +82,96 @@ const CLOTH_PALETTE: Record<HallId, string[]> = {
   cathedral: ['#1a0a2a','#2a0a3a','#0a1a2a','#1a0a3a','#2a0a4a','#0a2a4a'],
 }
 
-// Vẽ từng khán giả chi tiết (DOM)
+// Vẽ từng khán giả chi tiết — Conductor POV: ban công tầng, to, chân thật
 export function renderAudience(container: HTMLElement, hallId: HallId){
   container.innerHTML = ''
   const hall = HALLS[hallId]
   const palette = CLOTH_PALETTE[hallId]
   const rows = hall.audienceRows
+  // Conductor POV: khán giả ở xa, trên cao, ban công
   for(let r=0;r<rows;r++){
     const row = document.createElement('div')
     row.className='audRow'
-    row.style.top = `${8 + r*7}%`
-    row.style.opacity = `${0.95 - r*0.15}`
-    row.style.transform = `scale(${1 - r*0.07})`
-    const count = 14 - r*2
+    // POV: hàng xa cao hơn, hàng gần thấp hơn, tạo perspective
+    row.style.top = `${4 + r*9}%`
+    row.style.opacity = `${0.92 - r*0.12}`
+    row.style.transform = `translateX(-50%) scale(${1 - r*0.08}) perspective(600px) rotateX(8deg)`
+    row.style.filter = `brightness(${1 - r*0.08})`
+    // balcony railing
+    row.style.borderBottom = r===rows-1 ? '3px solid rgba(212,179,106,0.35)' : 'none'
+    row.style.paddingBottom = '8px'
+    row.style.background = r===rows-1 ? 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.25))' : 'transparent'
+    const count = 10 - r // to hơn nên ít người hơn, đỡ rối
+    row.style.gap = '18px'
     for(let i=0;i<count;i++){
       const person = document.createElement('div')
       person.className='person'
       const col = palette[Math.floor(Math.random()*palette.length)]
-      // 3 pose: ngồi thường, vỗ tay, nghiêng
       const pose = Math.random()
       const poseClass = pose<0.33?'pose-clap': pose<0.66?'pose-lean':'pose-sit'
       person.classList.add(poseClass)
-      person.innerHTML = `<div class="pHead"></div><div class="pBody" style="background:${col}"></div>`
-      // màu da ngẫu nhiên
-      const skin = ['#f5d0a8','#e8b98a','#d9a679','#c68660'][Math.floor(Math.random()*4)]
-      ;(person.querySelector('.pHead') as HTMLElement).style.background = skin
+      // chi tiết hơn: thêm tóc, cổ áo
+      person.innerHTML = `<div class="pHead"></div><div class="pBody" style="background:${col}"><div class="pCollar"></div></div>`
+      const skin = ['#f5d0a8','#e8b98a','#d9a679','#c68660', '#8d5524'][Math.floor(Math.random()*5)]
+      const head = person.querySelector('.pHead') as HTMLElement
+      head.style.background = skin
+      // tóc ngẫu nhiên
+      const hair = ['#1a0f08','#2a1a0a','#3a2a1a','#5a3a18','#0a0a0a','#4a2a0a'][Math.floor(Math.random()*6)]
+      head.style.boxShadow = `inset 0 4px 0 ${hair}`
+      // animation delay riêng
+      person.style.animationDelay = `${(r*0.2 + i*0.08)%2}s`
       row.appendChild(person)
     }
     container.appendChild(row)
   }
-  // label tầng
+  // Chandelier cho hall sang
+  if(hallId==='vienna' || hallId==='paris'){
+    const chand = document.createElement('div')
+    chand.className='chandelier'
+    chand.textContent='✦'
+    container.appendChild(chand)
+  }
   const label = document.createElement('div')
   label.className='hallLabel'
   label.textContent = hall.subtitle
   container.appendChild(label)
 }
 
-// Vẽ từng nhạc công chi tiết
+// Vẽ từng nhạc công — Conductor POV: fan hình quạt trước mặt, to, chân thật, từng người có giá nhạc
 export function renderOrchestra(container: HTMLElement, hallId: HallId){
   container.innerHTML = ''
   const hall = HALLS[hallId]
   const groups = hall.musicianGroups
+  // POV: dàn nhạc hình quạt, gần to, xa nhỏ, cong
+  const total = groups.reduce((s,g)=>s+g.count,0)
   let idx=0
   for(const g of groups){
     const section = document.createElement('div')
     section.className='orchSection'
+    // fan: mỗi section lệch góc nhẹ
+    const angle = (idx / total - 0.5) * 40 // -20deg to 20deg
+    section.style.transform = `translateX(-50%) rotate(${angle*0.15}deg)`
+    section.style.left = `${50 + (idx/total -0.5)*60}%`
+    section.style.bottom = `${14 + Math.abs(idx/total -0.5)*12}%`
     const title = document.createElement('div')
     title.className='secTitle'
     title.textContent = g.name
     section.appendChild(title)
     const row = document.createElement('div')
     row.className='musRow'
+    row.style.gap = '14px'
     for(let i=0;i<g.count;i++){
       const m = document.createElement('div')
       m.className='musician'
-      // pose nhạc cụ
-      m.innerHTML = `<div class="mIcon">${g.icon}</div><div class="mBody"></div><div class="mStand"></div>`
-      // animation delay ngẫu nhiên
-      m.style.animationDelay = `${(idx*0.12)%1}s`
+      // chi tiết: thêm tay, nhạc cụ
+      const hasBow = g.icon==='🎻'
+      m.innerHTML = `<div class="mIcon">${g.icon}</div><div class="mBody"><div class="mHands"></div></div><div class="mStand"></div><div class="mChair"></div>`
+      if(hasBow) m.querySelector('.mHands')!.innerHTML = '<span style="font-size:10px">︻</span>'
+      m.style.animationDelay = `${(idx*0.11)%1.2}s`
+      // scale theo khoảng cách: gần to hơn
+      const dist = Math.abs(idx/total -0.5)
+      m.style.transform = `scale(${1 - dist*0.12})`
+      m.style.opacity = `${1 - dist*0.08}`
       idx++
       row.appendChild(m)
     }
