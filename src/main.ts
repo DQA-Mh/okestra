@@ -5,8 +5,7 @@ import { Baton } from './conduct/Baton'
 import { Score } from './conduct/Score'
 import { HALLS, renderAudience, renderOrchestra, applyHallColors, type HallId } from './scene/Halls'
 import { ThreeHall } from './scene/ThreeHall'
-
-type Beat = { time:number, dir:number, x?:number, y?:number, cue?:string }
+import { PatternEngine } from './conduct/PatternEngine'
 
 const menu = document.getElementById('menu')!
 const app = document.getElementById('app')!
@@ -36,18 +35,16 @@ const audio = new AudioEngine()
 const tracker = new Tracker(video, camCanvas)
 const baton = new Baton()
 const score = new Score()
+const pattern = new PatternEngine()
 
-let beats: Beat[] = []
-let notes: { x:number,y:number,time:number,dir:number,cue:string, active:boolean }[] = []
-let next = 0
-let travel = 1.4
 let playing = false
 let handR = { x:0.5,y:0.5, vx:0, vy:0, swinging:false, dir:0 }
 let handL = { x:0.5,y:0.5, vx:0, vy:0, swinging:false, dir:0 }
 let calibHold = 0
 let raf = 0
+let lastBeatTime = 0
 
-// Opera hall parallax + 5 halls chi tiết + 3D
+// Opera hall 3D + 2D
 const far = document.getElementById('far')!
 const mid = document.getElementById('mid')!
 const near = document.getElementById('near')!
@@ -55,12 +52,7 @@ const light = document.getElementById('light')!
 const menuFar = document.getElementById('menuFar') as HTMLElement | null
 const threeWrap = document.getElementById('threeWrap')!
 let threeHall: ThreeHall | null = null
-try {
-  threeHall = new ThreeHall(threeWrap)
-  // Ẩn CSS hall 2D khi có 3D để không che (giữ near podium thôi)
-  far.style.opacity = '0.0'
-  mid.style.opacity = '0.0'
-} catch(e){ console.warn('[Three] fallback 2D', e) }
+try { threeHall = new ThreeHall(threeWrap); far.style.opacity='0.0'; mid.style.opacity='0.0' } catch(e){ console.warn('[Three] fallback',e) }
 let targetPan = 0
 function parallax(v:number){
   far.style.transform = `translateX(${v*12}px)`
@@ -73,142 +65,101 @@ function parallax(v:number){
 }
 let currentHall: HallId = 'vienna'
 function setHall(id: HallId){
-  currentHall = id
+  currentHall=id
   applyHallColors(id)
-  // Render chi tiết từng người cho game hall (2D fallback, ẩn khi có 3D)
-  renderAudience(far, id)
-  far.classList.add('has-detailed')
-  renderOrchestra(mid, id)
-  mid.classList.add('has-detailed')
-  // Render cho menu hall
-  if(menuFar){
-    renderAudience(menuFar, id)
-    menuFar.classList.add('has-detailed')
-  }
-  // 3D hall
+  renderAudience(far,id); far.classList.add('has-detailed')
+  renderOrchestra(mid,id); mid.classList.add('has-detailed')
+  if(menuFar){ renderAudience(menuFar,id); menuFar.classList.add('has-detailed') }
   threeHall?.setHall(id as any)
-  // cập nhật accent cho menu
   document.documentElement.style.setProperty('--accent', HALLS[id].colors.accent)
-  // highlight card
-  document.querySelectorAll('.hallCard').forEach(c=>{
-    c.classList.toggle('active', (c as HTMLElement).dataset.hall===id)
-  })
-  console.log(`[Hall] ${HALLS[id].name} — ${HALLS[id].musicianGroups.length} groups`)
+  document.querySelectorAll('.hallCard').forEach(c=> c.classList.toggle('active', (c as HTMLElement).dataset.hall===id))
 }
 
+// Maestro: baton downbeat + dynamics tay trái
 tracker.onHands = (r,l)=>{
   handR=r; handL=l
   baton.update(r, audio.time)
-  if(playing && r.swinging && Math.abs(r.vy) > 1){
-    tryHit(r.x, r.y, r.dir, {x:r.vx,y:r.vy})
+  if(playing && r.swinging && Math.abs(r.vy) > 0.9){
+    const res = pattern.onDownbeat(r.dir, audio.time, {x:r.x, y:r.y})
+    if(res.result){
+      // dynamics check: tay trái cao/thấp so với expected
+      const expectedDyn = res.beat?.dynamics || 'mf'
+      const leftH = handL.y // 0..1, cao = 1
+      const dynOk = (expectedDyn==='f'&& leftH>0.6) || (expectedDyn==='ff'&& leftH>0.75) || (expectedDyn==='p'&& leftH<0.4) || (expectedDyn==='pp'&& leftH<0.25) || (['mp','mf'].includes(expectedDyn))
+      let final = res.result
+      if(!dynOk && final==='Perfect') final='Good'
+      score.hit(final)
+      feedback.textContent = final + (res.beat?.cue?` ${res.beat.cue}`:'')
+      feedback.style.color = final==='Perfect'?'#facc15': final==='Good'?'#22c55e':'#ef4444'
+      feedback.style.opacity='1'; feedback.style.transform='translate(-50%,-50%) scale(1.15)'
+      setTimeout(()=>{ feedback.style.opacity='0'; feedback.style.transform='translate(-50%,-50%) scale(1)' }, 380)
+      // pulse tempo ring
+      tempoRing.classList.remove('pulse'); void tempoRing.offsetWidth; tempoRing.classList.add('pulse')
+      lastBeatTime = audio.time
+    } else if(res.result==='Miss'){
+      score.hit('Miss')
+    }
   }
 }
 baton.onDownbeat = ()=>{
+  // cũng pulse khi downbeat dù không trúng beat (cảm giác chỉ huy)
   tempoRing.classList.remove('pulse'); void tempoRing.offsetWidth; tempoRing.classList.add('pulse')
 }
 
 score.onHit = (r,s,c)=>{
-  scoreEl.textContent = `Score ${s}`
-  comboEl.textContent = c>1 ? `Combo x${c}` : ''
-  accEl.textContent = `Acc ${score.acc.toFixed(1)}%`
-  // audience light
-  fill.style.width = `${score.audience}%`
-  // feedback
-  feedback.textContent = r
-  feedback.style.color = r==='Perfect'?'#facc15': r==='Good'?'#22c55e':'#ef4444'
-  feedback.style.opacity='1'
-  feedback.style.transform='translate(-50%,-50%) scale(1.15)'
-  setTimeout(()=>{ feedback.style.opacity='0'; feedback.style.transform='translate(-50%,-50%) scale(1)' }, 350)
+  scoreEl.textContent=`Score ${s}`
+  comboEl.textContent=c>1?`Combo x${c}`:''
+  accEl.textContent=`Acc ${score.acc.toFixed(1)}%`
+  fill.style.width=`${score.audience}%`
 }
-score.onAud = v=> fill.style.width = `${v}%`
-
-function spawn(){
-  const t = audio.time
-  while(next < beats.length && beats[next].time - travel <= t){
-    const b = beats[next]
-    notes.push({ x:b.x!, y:b.y!, time:b.time, dir:b.dir, cue:b.cue||'', active:true })
-    next++
-  }
-  // miss
-  for(const n of notes) if(n.active && t > n.time + 0.25){ n.active=false; score.hit('Miss') }
-  notes = notes.filter(n=>n.active)
-}
-
-function tryHit(x:number,y:number, dir:number, _vel:{x:number,y:number}){
-  const t = audio.time
-  let best:any=null, bestDiff=Infinity
-  const W=canvas.width, H=canvas.height
-  for(const n of notes){
-    if(!n.active) continue
-    const diff=Math.abs(t-n.time)
-    if(diff>0.25) continue
-    const px=n.x*W, py=(1-n.y)*H, hx=x*W, hy=(1-y)*H
-    const dist=Math.hypot(px-hx, py-hy)
-    if(dist>90) continue
-    if(diff<bestDiff){ best=n; bestDiff=diff }
-  }
-  if(!best){
-    // fallback time only (Space)
-    for(const n of notes){ if(!n.active) continue; const d=Math.abs(t-n.time); if(d<bestDiff){ best=n; bestDiff=d } }
-    if(!best) return null
-  }
-  const match = best.dir===dir
-  let res: 'Perfect'|'Good'|null = null
-  if(bestDiff<=0.08 && match) res='Perfect'
-  else if(bestDiff<=0.18) res='Good'
-  else return null
-  if(!match && res==='Perfect') res='Good'
-  best.active=false
-  score.hit(res)
-  return { res, diff:bestDiff }
-}
+score.onAud = v=> fill.style.width=`${v}%`
 
 function draw(){
   const W=canvas.width, H=canvas.height
   ctx.clearRect(0,0,W,H)
-  // subtle grid
+  // grid nhẹ
   ctx.strokeStyle='rgba(255,255,255,0.04)'; ctx.lineWidth=1
   for(let x=0;x<W;x+=80){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke() }
   for(let y=0;y<H;y+=80){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke() }
-  const t=audio.time
-  for(const n of notes){
-    const p=Math.min(1,Math.max(0,(t - (n.time - travel))/travel))
-    const pulse=0.75 + p*0.45 + Math.sin(t*7)*0.04*(p>0.6?1:0)
-    const px=n.x*W, py=(1-n.y)*H
-    const r=34*pulse
-    const colors=['#ef4444','#22c55e','#06b6d4','#facc15']
-    const col=colors[n.dir]
-    ctx.globalAlpha=0.16 + p*0.18
-    ctx.beginPath(); ctx.arc(px,py,r+12,0,Math.PI*2); ctx.strokeStyle=col; ctx.lineWidth=3; ctx.stroke()
-    ctx.globalAlpha=1
-    ctx.beginPath(); ctx.arc(px,py,r,0,Math.PI*2); ctx.fillStyle=col; ctx.fill(); ctx.strokeStyle='#ffffffcc'; ctx.lineWidth=2; ctx.stroke()
-    // cue text
-    ctx.fillStyle='#0a0e1a'; ctx.font='700 10px system-ui'; ctx.textAlign='center'; ctx.fillText(n.cue, px, py+4)
-    // arrow
-    ctx.save(); ctx.translate(px,py); ctx.rotate(n.dir*Math.PI/2); ctx.fillStyle='#0a0e1a'; ctx.beginPath(); ctx.moveTo(0,-10); ctx.lineTo(-7,7); ctx.lineTo(7,7); ctx.closePath(); ctx.fill(); ctx.restore()
-    if(n.time > t) { ctx.fillStyle='#fff'; ctx.font='11px system-ui'; ctx.fillText((n.time - t).toFixed(2)+'s', px, py + r + 16) }
-  }
+  // Maestro pattern guide (quỹ đạo)
+  pattern.drawGuide(ctx, W, H, audio.time)
   // hands
   const hxR=handR.x*W, hyR=(1-handR.y)*H
   const hxL=handL.x*W, hyL=(1-handL.y)*H
-  // left dynamics line
-  ctx.strokeStyle='rgba(212,179,106,0.5)'; ctx.beginPath(); ctx.moveTo(hxL,0); ctx.lineTo(hxL,H); ctx.stroke()
-  // baton
+  // dynamics line + label
+  ctx.strokeStyle='rgba(212,179,106,0.45)'; ctx.beginPath(); ctx.moveTo(hxL,0); ctx.lineTo(hxL,H); ctx.stroke()
+  ctx.fillStyle= handL.y>0.65?'#facc15' : handL.y<0.35?'#60a5fa':'#d4b36a'
+  ctx.font='700 11px Inter'; ctx.fillText(handL.y>0.65?'FORTE':handL.y<0.35?'PIANO':'MEZZO', hxL+12, hyL-12)
+  // baton trail
   ctx.beginPath(); ctx.arc(hxR,hyR,11,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill(); ctx.strokeStyle='#facc15'; ctx.lineWidth=2; ctx.stroke()
+  // left hand
   ctx.beginPath(); ctx.arc(hxL,hyL,8,0,Math.PI*2); ctx.fillStyle='rgba(212,179,106,0.9)'; ctx.fill()
-  // dynamics label
-  const dyn = handL.y > 0.65 ? 'forte' : handL.y < 0.35 ? 'piano' : 'mezzo'
-  ctx.fillStyle='#d4b36a'; ctx.font='11px system-ui'; ctx.fillText(dyn, hxL+12, hyL-12)
-  ctx.fillStyle='rgba(255,255,255,0.6)'; ctx.font='12px system-ui'; ctx.fillText(`t=${t.toFixed(2)}s`, 12, 20)
+  // tempo pulse
+  const since = audio.time - lastBeatTime
+  if(since < 0.22){
+    ctx.globalAlpha = 0.25 - since*1
+    ctx.beginPath(); ctx.arc(W*0.5,H*0.5, 80 + since*120, 0, Math.PI*2); ctx.strokeStyle='#d4b36a'; ctx.lineWidth=2; ctx.stroke()
+    ctx.globalAlpha=1
+  }
+  ctx.fillStyle='rgba(255,255,255,0.6)'; ctx.font='12px Inter'; ctx.fillText(`t=${audio.time.toFixed(2)}s  BPM${pattern.bpm} ${pattern.timeSig}`, 12, 20)
+  // cue hint
+  const cur = pattern.currentBeat
+  if(cur){
+    ctx.fillStyle='rgba(212,179,106,0.9)'; ctx.font='700 13px Inter'; ctx.textAlign='center'
+    ctx.fillText(`Cue: ${cur.cue||'-'}  •  Dynamics: ${cur.dynamics} • Beat ${cur.beatInMeasure+1}/${pattern.timeSig==='4/4'?4:3}`, W*0.5, H-18)
+    ctx.textAlign='left'
+  }
 }
 
 function loop(){
   if(playing){
-    spawn(); draw()
-    if(next>=beats.length && notes.length===0) end()
+    // check miss do không vung
+    const miss = pattern.checkMiss(audio.time)
+    if(miss){ score.hit('Miss'); feedback.textContent='Miss'; feedback.style.color='#ef4444'; feedback.style.opacity='1'; setTimeout(()=>feedback.style.opacity='0',300) }
+    draw()
+    if(pattern.idx >= pattern.beats.length) end()
     else raf=requestAnimationFrame(loop)
   } else {
-    // calib
     const m=(tracker as any).getMouse?.()
     const holding = m?.down || (handR.x>0.33 && handR.x<0.67)
     if(holding){ calibHold+=1/60; const p=Math.min(1,calibHold/1.5); (document.getElementById('calibTxt') as HTMLElement).textContent=`Đang nhận diện... ${Math.floor(p*100)}%`; frame.style.borderColor=`rgb(${255*(1-p)},${255*p},120)`; if(p>=1) calib.classList.add('hidden') }
@@ -220,13 +171,15 @@ function loop(){
 
 async function start(){
   await audio.play()
-  next=0; notes=[]; score.reset()
+  pattern.idx=0
+  score.reset()
   scoreEl.textContent='Score 0'; comboEl.textContent=''; accEl.textContent='Acc 0%'; fill.style.width='50%'
   calib.classList.add('hidden')
   playing=true
   startBtn.textContent='Đang diễn…'
   startBtn.disabled=true
-  console.log('[Okestra] start')
+  lastBeatTime=audio.time
+  console.log('[Okestra Maestro] start', pattern.timeSig, pattern.bpm)
 }
 
 function end(){
@@ -238,10 +191,9 @@ function end(){
   rStats.textContent=`Perfect ${score.perfect} Good ${score.good} Miss ${score.miss} • Acc ${score.acc.toFixed(1)}%`
 }
 
-// MENU — Phase 1 đẹp
+// MENU
 function showMenu(){ menu.classList.remove('hidden'); app.classList.add('hidden') }
 function showGame(){ menu.classList.add('hidden'); app.classList.remove('hidden') }
-// Curtain menu auto open
 setTimeout(()=>{ document.getElementById('menuCurtainL')?.classList.add('open'); document.getElementById('menuCurtainR')?.classList.add('open') }, 300)
 document.querySelectorAll('.menuBtn').forEach(b=>{
   b.addEventListener('click', ()=>{
@@ -253,10 +205,11 @@ document.querySelectorAll('.menuBtn').forEach(b=>{
     else if(act==='settings'){ document.getElementById('modalSettings')?.classList.remove('hidden') }
   })
 })
-document.querySelectorAll('.closeModal').forEach(b=> b.addEventListener('click', ()=>{
-  (b.closest('.modal') as HTMLElement).classList.add('hidden')
-}))
+document.querySelectorAll('.closeModal').forEach(b=> b.addEventListener('click', ()=>{ (b.closest('.modal') as HTMLElement).classList.add('hidden') }))
 document.querySelectorAll('.songCard').forEach(c=> c.addEventListener('click', ()=>{
+  const id=(c as HTMLElement).dataset.id
+  // chọn tác phẩm → đổi hall/beatmap tương ứng (demo: beethoven->4/4, strauss->3/4)
+  if(id==='strauss'){ pattern.timeSig='3/4'; pattern.bpm=110 } else { pattern.timeSig='4/4'; pattern.bpm=120 }
   document.getElementById('modalSongs')?.classList.add('hidden'); showGame(); calib.classList.remove('hidden')
 }))
 document.querySelectorAll('.hallCard').forEach(c=>{
@@ -265,26 +218,27 @@ document.querySelectorAll('.hallCard').forEach(c=>{
     if(hid) setHall(hid)
   })
 })
-// Khởi tạo hall mặc định chi tiết
 setHall('vienna')
 document.getElementById('vol')?.addEventListener('input', e=>{ const _v=parseFloat((e.target as HTMLInputElement).value); void _v })
 document.getElementById('diff')?.addEventListener('input', e=>{
   const v=parseFloat((e.target as HTMLInputElement).value)
   const lab=document.getElementById('diffVal')!
   if(v<0.33) lab.textContent='Easy'; else if(v<0.66) lab.textContent='Normal'; else lab.textContent='Hard'
-  void (0.12 - v*0.07)
-  travel = 1.4
+  // ánh xạ difficulty vào window
+  if(v<0.33){ pattern.perfectWindow=0.12; pattern.goodWindow=0.24 }
+  else if(v<0.66){ pattern.perfectWindow=0.09; pattern.goodWindow=0.19 }
+  else { pattern.perfectWindow=0.06; pattern.goodWindow=0.14 }
 })
-menuBtn?.addEventListener('click', ()=>{ showMenu(); playing=false; cancelAnimationFrame(raf) })
-backMenu?.addEventListener('click', ()=>{ result.classList.add('hidden'); showMenu() })
+document.getElementById('menuBtn')?.addEventListener('click', ()=>{ showMenu(); playing=false; cancelAnimationFrame(raf) })
+document.getElementById('backMenu')?.addEventListener('click', ()=>{ result.classList.add('hidden'); showMenu() })
 
-// events game
+// game events: fallback phím
 window.addEventListener('keydown', e=>{
-  if(e.code==='Space'){ e.preventDefault(); if(!playing && calib.classList.contains('hidden')) start(); else { const r=tryHit(handR.x,handR.y,handR.dir,{x:0,y:1}); if(r) feedback.textContent=r.res }}
-  if(e.code==='ArrowUp'){ const r=tryHit(handR.x,handR.y,1,{x:0,y:1}); if(r) feedback.textContent=r.res }
-  if(e.code==='ArrowDown'){ const r=tryHit(handR.x,handR.y,0,{x:0,y:-1}); if(r) feedback.textContent=r.res }
-  if(e.code==='ArrowLeft'){ const r=tryHit(handR.x,handR.y,2,{x:-1,y:0}); if(r) feedback.textContent=r.res }
-  if(e.code==='ArrowRight'){ const r=tryHit(handR.x,handR.y,3,{x:1,y:0}); if(r) feedback.textContent=r.res }
+  if(e.code==='Space'){ e.preventDefault(); if(!playing && calib.classList.contains('hidden')) start(); else { const r=pattern.onDownbeat(handR.dir, audio.time, {x:handR.x,y:handR.y}); if(r.result){ score.hit(r.result as any); feedback.textContent=r.result! } }}
+  if(e.code==='ArrowUp'){ const r=pattern.onDownbeat(1, audio.time, {x:handR.x,y:handR.y}); if(r.result) score.hit(r.result as any) }
+  if(e.code==='ArrowDown'){ const r=pattern.onDownbeat(0, audio.time, {x:handR.x,y:handR.y}); if(r.result) score.hit(r.result as any) }
+  if(e.code==='ArrowLeft'){ const r=pattern.onDownbeat(2, audio.time, {x:handR.x,y:handR.y}); if(r.result) score.hit(r.result as any) }
+  if(e.code==='ArrowRight'){ const r=pattern.onDownbeat(3, audio.time, {x:handR.x,y:handR.y}); if(r.result) score.hit(r.result as any) }
   if(e.code==='KeyA') { targetPan=Math.max(-1,targetPan-0.22); parallax(targetPan) }
   if(e.code==='KeyD') { targetPan=Math.min(1,targetPan+0.22); parallax(targetPan) }
 })
@@ -292,7 +246,7 @@ let dragging=false, sx=0, sp=0
 canvas.addEventListener('mousedown', e=>{ dragging=true; sx=e.clientX; sp=targetPan })
 window.addEventListener('mousemove', e=>{ if(!dragging) return; const dx=(e.clientX-sx)/innerWidth; targetPan=Math.max(-1,Math.min(1,sp+dx*2)); parallax(targetPan) })
 window.addEventListener('mouseup', ()=>dragging=false)
-canvas.addEventListener('click', ()=>{ if(!playing) return; const r=tryHit(handR.x,handR.y,handR.dir,{x:0,y:1}); if(r) feedback.textContent=r.res })
+canvas.addEventListener('click', ()=>{ if(!playing) return; const r=pattern.onDownbeat(handR.dir, audio.time, {x:handR.x,y:handR.y}); if(r.result) score.hit(r.result as any) })
 
 startBtn.addEventListener('click', ()=>{ calib.classList.add('hidden'); start() })
 camBtn.addEventListener('click', async()=>{
@@ -302,17 +256,19 @@ camBtn.addEventListener('click', async()=>{
   }catch(e){ alert('Không mở camera: '+e+'\nDùng chuột giữ + kéo để chơi.') }
 })
 retry.addEventListener('click', ()=>{
-  result.classList.add('hidden'); calib.classList.remove('hidden'); calibHold=0; startBtn.disabled=false; startBtn.textContent='Bắt đầu'; score.reset(); loadBeatsInternal().then(()=>loop())
+  result.classList.add('hidden'); calib.classList.remove('hidden'); calibHold=0; startBtn.disabled=false; startBtn.textContent='Bắt đầu'; score.reset(); loadBeats().then(()=>loop())
 })
 
 // init
-async function loadBeatsInternal(){
+async function loadBeats(){
   try{
     const res=await fetch('/beatmaps/okestra_beatmap.json')
-    beats=await res.json()
-    beats.forEach(b=>{ if(b.x===undefined){ b.x=Math.random()*0.7+0.15; b.y=Math.random()*0.55+0.25; b.cue=['Strings','Brass','Winds','Perc'][b.dir%4] }})
-    beats.sort((a,b)=>a.time-b.time)
-  }catch{ beats=Array.from({length:32},(_,i)=>({ time:2+i*0.55, dir:i%4, x:Math.random()*0.7+0.15, y:Math.random()*0.55+0.25, cue:['Strings','Brass','Winds','Perc'][i%4] })) }
+    const data=await res.json()
+    pattern.load(data, '4/4', 120)
+  }catch{
+    const data=Array.from({length:32},(_,i)=>({ time:2+i*0.55, dir:i%4 }))
+    pattern.load(data, '4/4', 120)
+  }
 }
 setTimeout(()=>{ document.getElementById('curtainL')?.classList.add('open'); document.getElementById('curtainR')?.classList.add('open') }, 600)
-loadBeatsInternal().then(()=>loop())
+loadBeats().then(()=>loop())
